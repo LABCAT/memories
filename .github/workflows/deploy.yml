@@ -1,0 +1,56 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Prep CI (Workspace)
+        run: |
+          printf "packages:\n  - .\nallowBuilds:\n  '@parcel/watcher': true\n  esbuild: true\n  sharp: true\n" > pnpm-workspace.yaml
+          rm -f pnpm-lock.yaml
+      - run: pnpm install
+      - name: Verify @labcat2020/animation-lab
+        run: |
+          node --input-type=module -e "
+          import * as v from '@labcat2020/animation-lab/vite';
+          import { readFileSync } from 'node:fs';
+          import { createRequire } from 'node:module';
+          const require = createRequire(import.meta.url);
+          const dir = require.resolve('@labcat2020/animation-lab/vite').replace(/src\/vite\.mjs$/, '');
+          const pkg = JSON.parse(readFileSync(dir + 'package.json', 'utf8'));
+          if (typeof v.astroAnimationsViteConfig !== 'function') {
+            throw new Error('missing astroAnimationsViteConfig in ' + pkg.version);
+          }
+          console.log('ok', pkg.name, pkg.version);
+          "
+      - run: pnpm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
