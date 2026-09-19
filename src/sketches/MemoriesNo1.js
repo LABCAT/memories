@@ -28,6 +28,8 @@ const midiUrl = base + 'audio/MemoriesNo1.mid';
 // Reason track 13 → MIDI index 12: the "Touch Orchestra" Combinator.
 // Its top voice is the melody. Photos are grouped by that voice's pitch.
 const MELODY_TRACK = 12;
+// Synth bass = Synth 4 (track 10); its notes drive the kick-style punch/flash.
+const BASS_TRACK = 10;
 const LOOP_AUDIO = true;
 
 const PHOTO_POP = 0.22; // seconds of pop-in
@@ -35,6 +37,7 @@ const PHOTO_MIN = 0.65; // starting scale of the pop
 const OUTER_PORTRAIT = 0.015; // frame breathing room on portrait (smaller = wider photo)
 const OUTER_LANDSCAPE = 0.03; // frame breathing room on landscape
 const LANDSCAPE_H = 0.82; // cap photo height on landscape so it's not too tall
+
 
 const sketch = (p) => {
   p.loopAudio = LOOP_AUDIO;
@@ -52,6 +55,9 @@ const sketch = (p) => {
   p.coverState = null;
   p.seed = 0;
   p.loopCount = 0;
+  p.bassHitT = -1;
+  p.devT = -1;
+  p.devDur = 0.6;
 
   p.setup = async () => {
     const params = new URLSearchParams(window.location.search);
@@ -83,6 +89,8 @@ const sketch = (p) => {
       const onsets = p.groupOnsets(data.tracks[MELODY_TRACK]?.notes ?? []);
       const melody = onsets.map((g) => g.reduce((hi, n) => (n.midi > hi.midi ? n : hi)));
       p.scheduleCueSet(melody, 'executeTrack13');
+      // Synth bass: its notes drive the punch/flash.
+      p.scheduleCueSet(data.tracks[BASS_TRACK]?.notes ?? [], 'executeBass', true);
     });
 
     // Photos stream in after the song; they must never block the song or loader.
@@ -166,6 +174,21 @@ const sketch = (p) => {
     const entry = pool[idx];
     p.photo = { img: entry.img, born: p.getSongPlaybackTime() };
     if (entry.color) setGradientBg(p, paletteFromColor(entry.color, p.rng));
+    // develop bloom lasts roughly the note length
+    p.devT = p.photo.born;
+    p.devDur = Math.max(0.35, Math.min(1.2, note.duration ?? 0.6));
+  };
+
+  /** Synth bass note → punch/flash timer read by draw(). */
+  p.executeBass = function () {
+    p.bassHitT = p.getSongPlaybackTime();
+  };
+
+  /** 1 at the hit, fading linearly to 0 after `dur` seconds. */
+  p.decay = (start, now, dur) => {
+    if (start < 0) return 0;
+    const t = (now - start) / dur;
+    return t <= 0 || t >= 1 ? 0 : 1 - t;
   };
 
   p.draw = () => {
@@ -178,6 +201,9 @@ const sketch = (p) => {
     if (!p.photo) return;
 
     const now = p.getSongPlaybackTime();
+    const hit = p.decay(p.bassHitT, now, 0.3);
+    const dev = p.decay(p.devT, now, p.devDur);
+
     const age = Math.max(0, now - p.photo.born);
     const t = Math.min(1, age / PHOTO_POP);
     // previous photo only needed as a backdrop during the pop
@@ -186,10 +212,23 @@ const sketch = (p) => {
       else p.photoPrev = null;
     }
     const e = 1 - Math.pow(1 - t, 2); // gentle ease-out, no overshoot
-    const weight = PHOTO_MIN + (1 - PHOTO_MIN) * e;
+    const weight = (PHOTO_MIN + (1 - PHOTO_MIN) * e) * (1 + 0.07 * hit);
     p.drawPhoto(p.photo.img, weight);
-    // frame stays fixed while the photo pops inside it
-    drawPhotoBorder(p, p.photoRect(p.photo.img, 1), now);
+
+    // develop bloom on each new photo + subtle bass hit flash
+    const flash = Math.max(dev * 0.4, hit * 0.22);
+    if (flash > 0.01) {
+      const r = p.photoRect(p.photo.img, weight);
+      const ctx = p.drawingContext;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = `rgba(255,255,255,${flash})`;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.restore();
+    }
+
+    // frame stays fixed while the photo pops inside; subtle bass note band flash
+    drawPhotoBorder(p, p.photoRect(p.photo.img, 1), now, hit * 0.5);
   };
 
   p.drawStatic = () => {

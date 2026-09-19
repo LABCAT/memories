@@ -137,8 +137,8 @@ export function setGradientBg(p, pal) {
   applyGradient(buildGradientCss(pal));
 }
 
-/** Rotating conic-gradient border around a photo rect. */
-export function drawPhotoBorder(p, rect, now) {
+/** Rotating conic-gradient border around a photo rect. `flash` (0-1) is a kick pop. */
+export function drawPhotoBorder(p, rect, now, flash = 0) {
   if (!rect?.w || !rect?.h) return;
   const ctx = p.drawingContext;
   if (typeof ctx.createConicGradient !== 'function') return;
@@ -164,6 +164,15 @@ export function drawPhotoBorder(p, rect, now) {
   ctx.strokeStyle = grad;
   ctx.lineWidth = strokeW;
   ctx.strokeRect(x, y, w, h);
+
+  // kick flash over the band
+  if (flash > 0.01) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(255,255,255,${0.7 * flash})`;
+    ctx.lineWidth = strokeW;
+    ctx.strokeRect(x, y, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+  }
 
   // outer pair: white then black going outward (pure solid)
   const thin = Math.max(3, unit * 0.005);
