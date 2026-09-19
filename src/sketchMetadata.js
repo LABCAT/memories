@@ -1,13 +1,13 @@
 export const sketchMetadata = {
-  'number-1': {
-    title: '#MemoriesNo1',
-    description: 'Photo-sampled particles drift across a memory.',
-    sketch: 'MemoriesNo1.js',
-  },
   'number-2': {
     title: '#MemoriesNo2',
-    description: 'MIDI-cued colour flashes and a centered ellipse.',
+    description: 'Photo-sampled particles drift across a memory.',
     sketch: 'MemoriesNo2.js',
+  },
+  'number-1': {
+    title: '#MemoriesNo1',
+    description: 'Every melody note lays another Japan 2018 memory onto the pile.',
+    sketch: 'MemoriesNo1.js',
   },
 };
 

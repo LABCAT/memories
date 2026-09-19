@@ -12,14 +12,14 @@ importers:
   .:
     dependencies:
       '@labcat2020/animation-lab':
-        specifier: 0.1.2
-        version: 0.1.2(astro@6.4.8(rollup@4.63.1)(sass-embedded@1.103.1)(sass@1.103.1)(supports-color@8.1.1))(sass-embedded@1.103.1)
+        specifier: 0.2.0
+        version: 0.2.0(astro@6.4.8(rollup@4.63.1)(sass-embedded@1.103.1)(sass@1.103.1)(supports-color@8.1.1))(sass-embedded@1.103.1)
       '@labcat2020/p5.audioreactive':
-        specifier: ^0.1.2
-        version: 0.1.2(p5@2.2.3)(supports-color@8.1.1)
+        specifier: ^0.2.0
+        version: 0.2.0(p5@2.2.3)(supports-color@8.1.1)
       '@labcat2020/p5.audioreactive-capture':
-        specifier: ^0.1.2
-        version: 0.1.2(p5@2.2.3)
+        specifier: ^0.1.4
+        version: 0.1.4(p5@2.2.3)
       astro:
         specifier: ^6.0.8
         version: 6.4.8(rollup@4.63.1)(sass-embedded@1.103.1)(sass@1.103.1)(supports-color@8.1.1)
@@ -475,22 +475,25 @@ packages:
   '@jridgewell/sourcemap-codec@1.6.0':
     resolution: {integrity: sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==}
 
-  '@labcat2020/animation-lab@0.1.2':
-    resolution: {integrity: sha512-E/vYv3eUjKlPy4CEi41MpmAzy+uhtu/UdC07lCz72mHRoZv5OGhfWIj1sQRZ10wojSxcVYIdeEAytlWmo2nfcg==}
+  '@labcat2020/animation-lab@0.2.0':
+    resolution: {integrity: sha512-JbXPnISijfZhsJnv/+Fa7zitEHhOJexpnOttG1UFrKbV+flrkjnPV4Ummc6U+YfSB73iRaVJ2WsRAjRV11peqw==}
     hasBin: true
     peerDependencies:
       astro: ^6.0.8
       sass-embedded: ^1.98.0
 
-  '@labcat2020/p5.audioreactive-capture@0.1.2':
-    resolution: {integrity: sha512-HMY0tSpMUKpQ/Zf1f/j5vBUZ4nyrOO3tDemqgeQgZbEt6ypeiF3hhkikPqFeO4oTvpjQCRJpbnTtGNWiklrb+w==}
+  '@labcat2020/p5.audioreactive-capture@0.1.4':
+    resolution: {integrity: sha512-ov0N0m3/g7ZRsi1LjylX+4fw6kyhOV3SwwVGAw/QgT9w1uQX2w+OslGO1dTjoJYdB5zYLig9V0UfOH1cNdFk1w==}
     peerDependencies:
       p5: 2.2.3
 
-  '@labcat2020/p5.audioreactive@0.1.2':
-    resolution: {integrity: sha512-eT5ejRLKS0YoWfac9HoR1FSPgLaDe1jSftxtAU5FAEsKwvMpWqTJXHS8p44rSLsnLkfSKiLFGMuu+jU4APg6IA==}
+  '@labcat2020/p5.audioreactive@0.2.0':
+    resolution: {integrity: sha512-6rUP9iEOyHEFwGZ06jJkxhfZTMvtYwa/W1q6pmd/pNxyqCXyWFUW/Ef+Au/rIq87BFMwLPEE9NN2iYwu/A64Rw==}
     peerDependencies:
       p5: 2.2.3
+
+  '@labcat2020/rocketship@0.1.0':
+    resolution: {integrity: sha512-dib4+7r+brcMESqeVDU/sNWpx9azRcBImzWZxAmX4Qc4EbxK604kYA7d1xbHr2KlqI6136zpXEENn7UZmlklnQ==}
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     resolution: {integrity: sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ==}
@@ -2864,24 +2867,27 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.6.0': {}
 
-  '@labcat2020/animation-lab@0.1.2(astro@6.4.8(rollup@4.63.1)(sass-embedded@1.103.1)(sass@1.103.1)(supports-color@8.1.1))(sass-embedded@1.103.1)':
+  '@labcat2020/animation-lab@0.2.0(astro@6.4.8(rollup@4.63.1)(sass-embedded@1.103.1)(sass@1.103.1)(supports-color@8.1.1))(sass-embedded@1.103.1)':
     dependencies:
+      '@labcat2020/rocketship': 0.1.0
       astro: 6.4.8(rollup@4.63.1)(sass-embedded@1.103.1)(sass@1.103.1)(supports-color@8.1.1)
       normalize.css: 8.0.1
       sass-embedded: 1.103.1
 
-  '@labcat2020/p5.audioreactive-capture@0.1.2(p5@2.2.3)':
+  '@labcat2020/p5.audioreactive-capture@0.1.4(p5@2.2.3)':
     dependencies:
       jszip: 3.10.1
       p5: 2.2.3
 
-  '@labcat2020/p5.audioreactive@0.1.2(p5@2.2.3)(supports-color@8.1.1)':
+  '@labcat2020/p5.audioreactive@0.2.0(p5@2.2.3)(supports-color@8.1.1)':
     dependencies:
       '@tonejs/midi': 2.0.28
       p5: 2.2.3
       p5.sound: 0.2.0(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
+
+  '@labcat2020/rocketship@0.1.0': {}
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true

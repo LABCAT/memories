@@ -1,129 +1,210 @@
 import p5 from 'p5';
 import '@lib/p5.audioReact.js';
+import '@lib/p5.fps.js';
 import initCapture from '@labcat2020/p5.audioreactive-capture';
-import { getCoverState, sampleCoverColor, responsiveCount } from './functions/coverImage.js';
+import { getCoverState } from './functions/coverImage.js';
+import {
+  JAPAN_PHOTOS,
+  JAPAN_FAMILIES,
+  familyForMidi,
+  japanPhotoUrl,
+  mulberry32,
+  hashSeed,
+  shuffle,
+} from './functions/japanPhotos.js';
 
 const base = import.meta.env.BASE_URL || './';
 const audioUrl = base + 'audio/MemoriesNo1.ogg';
 const midiUrl = base + 'audio/MemoriesNo1.mid';
-// Single image for now — expand to array when you add more.
-// Existing set: 8 images in public/images/. Just push more paths here.
-const imageUrl = base + 'images/Kunming-Garden-Spring-Pavilion-Pukekura-Park.jpg';
 
+// Reason track 13 → MIDI index 12: the "Touch Orchestra" Combinator.
+// Its top voice is the melody. Photos are grouped by that voice's pitch.
+const MELODY_TRACK = 12;
 const LOOP_AUDIO = true;
+const EXPECTED_NOTES = 72;
+
+const CARD_SIZE = 0.17; // × min(width, height)
+const SPREAD = 0.54; // × min(width, height)
 
 const sketch = (p) => {
-  p.plateau = [];
-  p.img = null;
-  p.coverState = null;
-  p._burstFrames = 0;
   p.loopAudio = LOOP_AUDIO;
+  p.song = null;
+  p.audioLoaded = false;
+  p.songHasFinished = false;
+  p.showingStatic = true;
+
+  p.families = {};
+  p.pointer = {};
+  p.cards = [];
+  p.index = 0;
+  p.photosReady = false;
+  p.cover = null;
+  p.coverState = null;
+  p.seed = 0;
+  p.loopCount = 0;
 
   p.setup = async () => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('fps') || params.get('fps') !== '0') p.enableFpsIndicator();
+    window.toggleFps = () => p.toggleFpsIndicator();
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey) p.toggleFpsIndicator();
+    });
+
+    p.seed = params.get('seed') || String(Math.floor(Math.random() * 1e9));
+    window.__memoriesSeed = p.seed;
+
     p.pixelDensity(1);
     p.createCanvas(window.innerWidth, window.innerHeight);
-    p.background(255);
+    p.background(0);
+    p.canvas.classList.add('p5Canvas--cursor-play');
     p.canvas.style.position = 'fixed';
     p.canvas.style.top = '0';
     p.canvas.style.left = '0';
     p.canvas.style.zIndex = '1';
 
-    initCapture(p, {
-      prefix: 'MemoriesNo1',
-      enabled: false,
-    });
+    initCapture(p, { prefix: 'MemoriesNo1', enabled: false });
 
-    p.img = await p.loadImage(imageUrl);
-    // Don't resize — keep native 1920x1080, sample via cover mapping (no empty space on mobile)
-    p.img.loadPixels();
-    p.coverState = getCoverState(p.img, p.width, p.height);
-    p.initPlateau();
+    p.applyGenerative();
 
     await p.loadSong(audioUrl, midiUrl, (data) => {
-      p.midiPpq = data.header.ppq;
-      p.scheduleCueSet(data.tracks[1]?.notes ?? [], 'onTrack1Cue');
+      const onsets = p.groupOnsets(data.tracks[MELODY_TRACK]?.notes ?? []);
+      const melody = onsets.map((g) => g.reduce((hi, n) => (n.midi > hi.midi ? n : hi)));
+      p.scheduleCueSet(melody, 'executeTrack13');
     });
+
+    // Photos stream in after the song; they must never block the song or loader.
+    p.loadPhotos()
+      .then(() => {
+        p.photosReady = true;
+      })
+      .catch((err) => console.error('[MemoriesNo1] photo load failed:', err));
+  };
+
+  /** Fresh photo order and starting memory each load / loop. */
+  p.applyGenerative = () => {
+    const rng = mulberry32(hashSeed(`${p.seed}:${p.loopCount}`));
+    p.rng = rng;
+    JAPAN_FAMILIES.forEach((fam) => {
+      if (p.families[fam]) p.families[fam] = shuffle(p.families[fam], rng);
+      p.pointer[fam] = 0;
+    });
+    p.cards = [];
+    p.index = 0;
+    p.cover = null;
+    p.coverState = null;
+  };
+
+  /** Never rejects: a bad/slow file just reduces that family's pool. */
+  p.loadPhotos = async () => {
+    const cap = Math.max(1200, Math.min(1800, Math.round(Math.min(p.width, p.height) * 1.1)));
+    await Promise.all(
+      Object.entries(JAPAN_PHOTOS).map(async ([fam, slugs]) => {
+        const results = await Promise.allSettled(
+          slugs.map(async (slug) => {
+            const img = await p.loadImage(japanPhotoUrl(base, slug));
+            if (!img || !img.width) throw new Error(`bad image: ${slug}`);
+            if (img.width > cap) img.resize(cap, 0);
+            return { img };
+          }),
+        );
+        const loaded = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+        const failed = results.length - loaded.length;
+        if (failed) console.warn(`[MemoriesNo1] ${failed}/${slugs.length} ${fam} photos failed`);
+        p.families[fam] = shuffle(loaded, p.rng);
+      }),
+    );
+    p.pickCover();
+  };
+
+  /** One clear memory for the pre-play static frame. */
+  p.pickCover = () => {
+    const fam = JAPAN_FAMILIES[Math.floor(p.rng() * JAPAN_FAMILIES.length)];
+    const pool = p.families[fam];
+    if (!pool?.length) return;
+    p.cover = pool[0];
+    p.coverState = getCoverState(p.cover.img, p.width, p.height);
+  };
+
+  p.groupOnsets = (notes) => {
+    const groups = new Map();
+    for (const n of notes) {
+      const g = groups.get(n.ticks);
+      if (g) g.push(n);
+      else groups.set(n.ticks, [n]);
+    }
+    return [...groups.values()].sort((a, b) => a[0].time - b[0].time);
+  };
+
+  /** Take the next photo of a family and lay it on the pile. */
+  p.addCard = (fam, now) => {
+    const pool = p.families[fam];
+    if (!pool?.length) return;
+    const idx = p.pointer[fam] % pool.length;
+    p.pointer[fam] = idx + 1;
+
+    const i = p.index++;
+    const golden = 2.39996323;
+    const angle = i * golden + p.rng() * 0.5;
+    const radius = SPREAD * Math.sqrt((i % EXPECTED_NOTES) / EXPECTED_NOTES);
+    p.cards.push({
+      img: pool[idx].img,
+      ux: Math.cos(angle) * radius,
+      uy: Math.sin(angle) * radius,
+      rot: angle + Math.PI / 2 + (p.rng() - 0.5) * 0.4,
+      scale: 0.9 + p.rng() * 0.25,
+      born: now,
+    });
+    if (p.cards.length > EXPECTED_NOTES * 2) {
+      p.cards.splice(0, p.cards.length - EXPECTED_NOTES * 2);
+    }
+  };
+
+  p.executeTrack13 = function (note) {
+    p.addCard(familyForMidi(note.midi), p.getSongPlaybackTime());
   };
 
   p.draw = () => {
-    if (!p.img) return;
-    // show static preview even before play — proves cover works & no empty space
-    if (!p.song?.isPlaying()) {
-      // idle drift: still animate slowly so preview isn't frozen
-      p.background(255);
-      for (let i = 0; i < Math.min(40, p.plateau.length); i++) {
-        const pt = p.plateau[i];
-        p.strokeWeight(2);
-        p.stroke(pt.colour);
-        p.circle(pt.x, pt.y, 2);
-      }
+    p.background(0);
+
+    if (p.showingStatic) {
+      p.drawStatic();
       return;
     }
 
-    // cue-driven burst: temporarily speed up + enlarge
-    const burst = p._burstFrames > 0 ? 1.5 : 1;
-    if (p._burstFrames > 0) p._burstFrames--;
-
-    for (let i = 0; i < p.plateau.length; i++) {
-      const particle = p.plateau[i];
-      let size = 3 / p.abs(particle.destX - particle.x);
-      particle.size = size > 2 ? size : 2;
-      p.strokeWeight(particle.size * burst);
-      p.stroke(particle.colour);
-      p.circle(particle.x, particle.y, particle.size);
-      const lerp = burst > 1 ? 0.35 : 0.2;
-      particle.x += (particle.destX - particle.x) * lerp;
-      particle.y += (particle.destY - particle.y) * lerp;
-
-      if (p.abs(particle.destX - particle.x) <= Math.random()) {
-        const posX = Math.floor(Math.random() * p.width);
-        const posY = Math.floor(Math.random() * p.height);
-        particle.destX = posX;
-        particle.destY = posY;
-        particle.x = posX - 2;
-        particle.y = posY - 2;
-        particle.colour = sampleCoverColor(p, p.img, posX, posY, p.coverState);
-      }
-    }
+    const now = p.getSongPlaybackTime();
+    const unit = Math.min(p.width, p.height);
+    for (const c of p.cards) p.drawCard(c, unit, now);
   };
 
-  p.initPlateau = () => {
-    p.clear();
-    p.background(255);
-    p.plateau = [];
-    // responsive by area — phone ~120, desktop ~300-400, no empty-space bias
-    const count = responsiveCount(p.width, p.height);
-    for (let i = 0; i < count; i++) {
-      const destX = Math.floor(Math.random() * p.width);
-      const destY = Math.floor(Math.random() * p.height);
-      p.plateau.push({
-        x: Math.floor(Math.random() * p.width),
-        y: Math.floor(Math.random() * p.height),
-        destX,
-        destY,
-        colour: sampleCoverColor(p, p.img, destX, destY, p.coverState),
-        size: 1,
-      });
-    }
+  p.drawStatic = () => {
+    if (!p.cover) return;
+    const c = p.coverState || getCoverState(p.cover.img, p.width, p.height);
+    p.image(p.cover.img, c.dx, c.dy, c.dw, c.dh);
   };
 
-  p.onTrack1Cue = function (note) {
-    // Visible MIDI reactivity: burst + re-seed 12% of particles
-    p._burstFrames = 12; // ~200ms at 60fps
-    const n = Math.floor(p.plateau.length * 0.12);
-    for (let k = 0; k < n; k++) {
-      const idx = Math.floor(p.random(p.plateau.length));
-      const pt = p.plateau[idx];
-      const posX = Math.floor(p.random(p.width));
-      const posY = Math.floor(p.random(p.height));
-      pt.destX = posX;
-      pt.destY = posY;
-      pt.x = posX - 2;
-      pt.y = posY - 2;
-      pt.colour = sampleCoverColor(p, p.img, posX, posY, p.coverState);
-    }
-    // also flash background faintly so even phone sees cue
-    // console.log('No1 cue', note?.currentCue, note?.midi);
+  p.drawCard = (c, unit, now) => {
+    const age = now - c.born;
+    const pop = age >= 0 && age < 0.2 ? 1 - age / 0.2 : 0;
+    const size = unit * CARD_SIZE * c.scale * (1 - 0.35 * pop);
+    const ar = c.img.width / c.img.height;
+    const w = ar >= 1 ? size * ar : size;
+    const h = ar >= 1 ? size : size / ar;
+    p.push();
+    p.translate(p.width / 2 + c.ux * unit, p.height / 2 + c.uy * unit);
+    p.rotate(c.rot);
+    const ctx = p.drawingContext;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 18;
+    p.image(c.img, -w / 2, -h / 2, w, h);
+    ctx.restore();
+    p.pop();
+  };
+
+  p.resetAnimation = () => {
+    p.loopCount += 1;
+    p.applyGenerative();
   };
 
   p.mouseClicked = () => {
@@ -132,10 +213,7 @@ const sketch = (p) => {
 
   p.windowResized = () => {
     p.resizeCanvas(window.innerWidth, window.innerHeight);
-    if (p.img) {
-      p.coverState = getCoverState(p.img, p.width, p.height);
-      p.initPlateau();
-    }
+    if (p.cover) p.coverState = getCoverState(p.cover.img, p.width, p.height);
   };
 };
 

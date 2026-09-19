@@ -4,8 +4,8 @@ Audio-reactive p5 sketches migrated from the legacy `memories-no-3` / `memories-
 
 ## Sketches
 
-- **#MemoriesNo1** — photo-sampled particles (from [memories-no-3](https://github.com/LABCAT/memories-no-3))
-- **#MemoriesNo2** — MIDI colour flashes (from [memories-no-4](https://github.com/LABCAT/memories-no-4))
+- **#MemoriesNo1** — MIDI colour flashes (from [memories-no-4](https://github.com/LABCAT/memories-no-4))
+- **#MemoriesNo2** — photo-sampled particles (from [memories-no-3](https://github.com/LABCAT/memories-no-3))
 
 ## Dev
 

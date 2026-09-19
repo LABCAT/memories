@@ -3,7 +3,7 @@
  * Eliminates empty space: image always fills the canvas (CSS `object-fit: cover`).
  * On mobile portrait, landscape 1920x1080 images are cropped left/right, not letterboxed.
  *
- * Current No1 bug: `p.img.resize(p.width,0)` leaves 600px+ empty at bottom on phone
+ * Current No2 bug: `p.img.resize(p.width,0)` leaves 600px+ empty at bottom on phone
  * because image height = 219px while canvas height = 844px.
  *
  * Usage:
@@ -81,7 +81,7 @@ export function canvasToImageCoords(canvasX, canvasY, state) {
 
 /**
  * Sample a color from the image as it appears under canvas point (x,y) with cover.
- * This fixes No1's bug where `p.img.get(destX,destY)` sampled stretched image coords
+ * This fixes No2's bug where `p.img.get(destX,destY)` sampled stretched image coords
  * that didn't match canvas — now dest is canvas space, mapped to image space.
  * Requires img has loaded pixels (call after load, img.loadPixels()).
  */
