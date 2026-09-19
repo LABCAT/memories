@@ -1,10 +1,15 @@
 packages:
   - .
-  - ../animations.labcat.nz/packages/*
-
-linkWorkspacePackages: true
 
 allowBuilds:
   '@parcel/watcher': true
   esbuild: true
   sharp: true
+
+minimumReleaseAgeExclude:
+  - '@labcat2020/animation-lab@0.1.2'
+  - '@labcat2020/p5.audioreactive-capture@0.1.2'
+  - '@labcat2020/p5.audioreactive@0.1.2'
+
+overrides:
+  p5: 2.2.3

@@ -14,4 +14,4 @@ pnpm install
 pnpm dev
 ```
 
-Uses `@labcat2020/animation-lab`, `@labcat2020/p5.audioreactive`, and `@labcat2020/p5.audioreactive-capture` from npm (linked locally via `pnpm-workspace.yaml` when Animation Lab is a sibling).
+Uses `@labcat2020/animation-lab`, `@labcat2020/p5.audioreactive`, and `@labcat2020/p5.audioreactive-capture` from npm.
