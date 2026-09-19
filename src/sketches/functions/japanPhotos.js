@@ -32,7 +32,6 @@ export const JAPAN_PHOTOS = {
   B4: [
     'b4-odaiba-ship',
     'b4-odaiba-bridge',
-    'b4-odaiba-night',
     'b4-reflect-purple-1',
     'b4-reflect-purple-2',
     'b4-yokohama-stadium',

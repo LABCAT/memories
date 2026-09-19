@@ -12,6 +12,14 @@ import {
   hashSeed,
   shuffle,
 } from './functions/japanPhotos.js';
+import {
+  installGradientBg,
+  setGradientBg,
+  samplePhotoColor,
+  paletteFromColor,
+  drawPhotoBorder,
+  FRAME_INSET,
+} from './functions/memoryBackground.js';
 
 const base = import.meta.env.BASE_URL || './';
 const audioUrl = base + 'audio/MemoriesNo1.ogg';
@@ -21,10 +29,12 @@ const midiUrl = base + 'audio/MemoriesNo1.mid';
 // Its top voice is the melody. Photos are grouped by that voice's pitch.
 const MELODY_TRACK = 12;
 const LOOP_AUDIO = true;
-const EXPECTED_NOTES = 72;
 
-const CARD_SIZE = 0.17; // × min(width, height)
-const SPREAD = 0.54; // × min(width, height)
+const PHOTO_POP = 0.22; // seconds of pop-in
+const PHOTO_MIN = 0.65; // starting scale of the pop
+const OUTER_PORTRAIT = 0.015; // frame breathing room on portrait (smaller = wider photo)
+const OUTER_LANDSCAPE = 0.03; // frame breathing room on landscape
+const LANDSCAPE_H = 0.82; // cap photo height on landscape so it's not too tall
 
 const sketch = (p) => {
   p.loopAudio = LOOP_AUDIO;
@@ -35,8 +45,8 @@ const sketch = (p) => {
 
   p.families = {};
   p.pointer = {};
-  p.cards = [];
-  p.index = 0;
+  p.photo = null;
+  p.photoPrev = null;
   p.photosReady = false;
   p.cover = null;
   p.coverState = null;
@@ -56,14 +66,16 @@ const sketch = (p) => {
 
     p.pixelDensity(1);
     p.createCanvas(window.innerWidth, window.innerHeight);
-    p.background(0);
     p.canvas.classList.add('p5Canvas--cursor-play');
     p.canvas.style.position = 'fixed';
     p.canvas.style.top = '0';
     p.canvas.style.left = '0';
     p.canvas.style.zIndex = '1';
+    p.canvas.style.background = 'transparent'; // let the CSS background show through
 
     initCapture(p, { prefix: 'MemoriesNo1', enabled: false });
+
+    installGradientBg(p, p.seed);
 
     p.applyGenerative();
 
@@ -89,8 +101,8 @@ const sketch = (p) => {
       if (p.families[fam]) p.families[fam] = shuffle(p.families[fam], rng);
       p.pointer[fam] = 0;
     });
-    p.cards = [];
-    p.index = 0;
+    p.photo = null;
+    p.photoPrev = null;
     p.cover = null;
     p.coverState = null;
   };
@@ -114,6 +126,13 @@ const sketch = (p) => {
         p.families[fam] = shuffle(loaded, p.rng);
       }),
     );
+    // Sample colours only once loaded — decoupled from loading, so it can never
+    // drop a photo. samplePhotoColor never throws.
+    for (const fam of JAPAN_FAMILIES) {
+      for (const entry of p.families[fam] ?? []) {
+        entry.color = samplePhotoColor(entry.img);
+      }
+    }
     p.pickCover();
   };
 
@@ -136,45 +155,41 @@ const sketch = (p) => {
     return [...groups.values()].sort((a, b) => a[0].time - b[0].time);
   };
 
-  /** Take the next photo of a family and lay it on the pile. */
-  p.addCard = (fam, now) => {
+  /** One image at a time, popping in to fill most of the screen. */
+  p.executeTrack13 = function (note) {
+    const fam = familyForMidi(note.midi);
     const pool = p.families[fam];
     if (!pool?.length) return;
     const idx = p.pointer[fam] % pool.length;
     p.pointer[fam] = idx + 1;
-
-    const i = p.index++;
-    const golden = 2.39996323;
-    const angle = i * golden + p.rng() * 0.5;
-    const radius = SPREAD * Math.sqrt((i % EXPECTED_NOTES) / EXPECTED_NOTES);
-    p.cards.push({
-      img: pool[idx].img,
-      ux: Math.cos(angle) * radius,
-      uy: Math.sin(angle) * radius,
-      rot: angle + Math.PI / 2 + (p.rng() - 0.5) * 0.4,
-      scale: 0.9 + p.rng() * 0.25,
-      born: now,
-    });
-    if (p.cards.length > EXPECTED_NOTES * 2) {
-      p.cards.splice(0, p.cards.length - EXPECTED_NOTES * 2);
-    }
-  };
-
-  p.executeTrack13 = function (note) {
-    p.addCard(familyForMidi(note.midi), p.getSongPlaybackTime());
+    if (p.photo) p.photoPrev = p.photo;
+    const entry = pool[idx];
+    p.photo = { img: entry.img, born: p.getSongPlaybackTime() };
+    if (entry.color) setGradientBg(p, paletteFromColor(entry.color, p.rng));
   };
 
   p.draw = () => {
-    p.background(0);
+    p.clear(); // transparent so the CSS background shows
 
     if (p.showingStatic) {
       p.drawStatic();
       return;
     }
+    if (!p.photo) return;
 
     const now = p.getSongPlaybackTime();
-    const unit = Math.min(p.width, p.height);
-    for (const c of p.cards) p.drawCard(c, unit, now);
+    const age = Math.max(0, now - p.photo.born);
+    const t = Math.min(1, age / PHOTO_POP);
+    // previous photo only needed as a backdrop during the pop
+    if (p.photoPrev) {
+      if (t < 1) p.drawPhoto(p.photoPrev.img, 1);
+      else p.photoPrev = null;
+    }
+    const e = 1 - Math.pow(1 - t, 2); // gentle ease-out, no overshoot
+    const weight = PHOTO_MIN + (1 - PHOTO_MIN) * e;
+    p.drawPhoto(p.photo.img, weight);
+    // frame stays fixed while the photo pops inside it
+    drawPhotoBorder(p, p.photoRect(p.photo.img, 1), now);
   };
 
   p.drawStatic = () => {
@@ -183,23 +198,24 @@ const sketch = (p) => {
     p.image(p.cover.img, c.dx, c.dy, c.dw, c.dh);
   };
 
-  p.drawCard = (c, unit, now) => {
-    const age = now - c.born;
-    const pop = age >= 0 && age < 0.2 ? 1 - age / 0.2 : 0;
-    const size = unit * CARD_SIZE * c.scale * (1 - 0.35 * pop);
-    const ar = c.img.width / c.img.height;
-    const w = ar >= 1 ? size * ar : size;
-    const h = ar >= 1 ? size : size / ar;
-    p.push();
-    p.translate(p.width / 2 + c.ux * unit, p.height / 2 + c.uy * unit);
-    p.rotate(c.rot);
-    const ctx = p.drawingContext;
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
-    ctx.shadowBlur = 18;
-    p.image(c.img, -w / 2, -h / 2, w, h);
-    ctx.restore();
-    p.pop();
+  p.photoRect = (img, weight) => {
+    const unit = Math.min(p.width, p.height);
+    const portrait = p.height >= p.width;
+    // portrait: tighter frame gives a wider photo; landscape: cap the height so it's shorter
+    const outer = portrait ? OUTER_PORTRAIT : OUTER_LANDSCAPE;
+    const margin = unit * (FRAME_INSET + outer);
+    const hLimit = (p.height - margin * 2) * (portrait ? 1 : LANDSCAPE_H);
+    const base = Math.min((p.width - margin * 2) / img.width, hLimit / img.height);
+    const scale = base * weight;
+    const w = img.width * scale;
+    const h = img.height * scale;
+    return { x: (p.width - w) / 2, y: (p.height - h) / 2, w, h };
+  };
+
+  p.drawPhoto = (img, weight) => {
+    if (!img || !img.width || !img.height) return;
+    const r = p.photoRect(img, weight);
+    p.image(img, r.x, r.y, r.w, r.h);
   };
 
   p.resetAnimation = () => {
