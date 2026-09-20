@@ -22,7 +22,7 @@ import {
 } from './functions/memoryBackground.js';
 
 const base = import.meta.env.BASE_URL || './';
-const audioUrl = base + 'audio/MemoriesNo1.ogg';
+const audioUrl = base + 'audio/MemoriesNo1.mp3';
 const midiUrl = base + 'audio/MemoriesNo1.mid';
 
 // Reason track 13 → MIDI index 12: the "Touch Orchestra" Combinator.
